@@ -1,41 +1,39 @@
+using Catalog.API.Data;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.AspNetCore.Builder;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Configuration;
+
 var builder = WebApplication.CreateBuilder(args);
 
-// Add services to the container.
-// Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
-builder.Services.AddOpenApi();
+// Adicionar serviços ao contêiner.
+
+// 1. Configurar o DbContext para PostgreSQL
+//    Ele vai automaticamente buscar a string de conexão do Secret Manager em desenvolvimento.
+builder.Services.AddDbContext<CatalogContext>(options =>
+    options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
+
+builder.Services.AddEndpointsApiExplorer();
+builder.Services.AddSwaggerGen();
 
 var app = builder.Build();
 
-// Configure the HTTP request pipeline.
+// Configurar o pipeline de requisições HTTP.
 if (app.Environment.IsDevelopment())
 {
-    app.MapOpenApi();
+    app.UseSwagger();
+    app.UseSwaggerUI();
 }
 
 app.UseHttpsRedirection();
 
-var summaries = new[]
-{
-    "Freezing", "Bracing", "Chilly", "Cool", "Mild", "Warm", "Balmy", "Hot", "Sweltering", "Scorching"
-};
+// Endpoints para CRUD de Produtos (ainda como placeholders)
+app.MapGet("/api/products", () => "Todos os produtos").WithName("GetProducts");
+app.MapGet("/api/products/{id}", (int id) => $"Produto com ID: {id}").WithName("GetProductById");
+app.MapPost("/api/products", () => "Produto criado").WithName("CreateProduct");
+app.MapPut("/api/products/{id}", (int id) => $"Produto com ID: {id} atualizado").WithName("UpdateProduct");
+app.MapDelete("/api/products/{id}", (int id) => $"Produto com ID: {id} deletado").WithName("DeleteProduct");
 
-app.MapGet("/weatherforecast", () =>
-{
-    var forecast =  Enumerable.Range(1, 5).Select(index =>
-        new WeatherForecast
-        (
-            DateOnly.FromDateTime(DateTime.Now.AddDays(index)),
-            Random.Shared.Next(-20, 55),
-            summaries[Random.Shared.Next(summaries.Length)]
-        ))
-        .ToArray();
-    return forecast;
-})
-.WithName("GetWeatherForecast");
 
 app.Run();
-
-record WeatherForecast(DateOnly Date, int TemperatureC, string? Summary)
-{
-    public int TemperatureF => 32 + (int)(TemperatureC / 0.5556);
-}
