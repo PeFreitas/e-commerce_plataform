@@ -1,4 +1,5 @@
 using Catalog.API.Data;
+using Catalog.API.Models; // Adicione este using para o Product
 using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.DependencyInjection;
@@ -8,9 +9,6 @@ using Microsoft.Extensions.Configuration;
 var builder = WebApplication.CreateBuilder(args);
 
 // Adicionar serviços ao contêiner.
-
-// 1. Configurar o DbContext para PostgreSQL
-//    Ele vai automaticamente buscar a string de conexão do Secret Manager em desenvolvimento.
 builder.Services.AddDbContext<CatalogContext>(options =>
     options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
 
@@ -28,12 +26,73 @@ if (app.Environment.IsDevelopment())
 
 app.UseHttpsRedirection();
 
-// Endpoints para CRUD de Produtos (ainda como placeholders)
-app.MapGet("/api/products", () => "Todos os produtos").WithName("GetProducts");
-app.MapGet("/api/products/{id}", (int id) => $"Produto com ID: {id}").WithName("GetProductById");
-app.MapPost("/api/products", () => "Produto criado").WithName("CreateProduct");
-app.MapPut("/api/products/{id}", (int id) => $"Produto com ID: {id} atualizado").WithName("UpdateProduct");
-app.MapDelete("/api/products/{id}", (int id) => $"Produto com ID: {id} deletado").WithName("DeleteProduct");
+// --- ENDPOINTS COM LÓGICA DE BANCO DE DADOS ---
 
+// GET: /api/products - Obter todos os produtos
+app.MapGet("/api/products", async (CatalogContext context) =>
+{
+    var products = await context.Products.ToListAsync();
+    return Results.Ok(products);
+})
+.WithName("GetProducts")
+.Produces<List<Product>>(StatusCodes.Status200OK); // Informa ao Swagger o que esperar
+
+// GET: /api/products/{id} - Obter produto por ID
+app.MapGet("/api/products/{id}", async (int id, CatalogContext context) =>
+{
+    var product = await context.Products.FindAsync(id);
+    return product is not null ? Results.Ok(product) : Results.NotFound();
+})
+.WithName("GetProductById")
+.Produces<Product>(StatusCodes.Status200OK)
+.Produces(StatusCodes.Status404NotFound);
+
+// POST: /api/products - Criar um novo produto
+app.MapPost("/api/products", async (Product product, CatalogContext context) =>
+{
+    context.Products.Add(product);
+    await context.SaveChangesAsync();
+    return Results.CreatedAtRoute("GetProductById", new { id = product.Id }, product);
+})
+.WithName("CreateProduct")
+.Produces<Product>(StatusCodes.Status201Created);
+
+// PUT: /api/products/{id} - Atualizar um produto
+app.MapPut("/api/products/{id}", async (int id, Product inputProduct, CatalogContext context) =>
+{
+    var product = await context.Products.FindAsync(id);
+    if (product is null)
+    {
+        return Results.NotFound();
+    }
+
+    product.Name = inputProduct.Name;
+    product.Description = inputProduct.Description;
+    product.Price = inputProduct.Price;
+    product.Stock = inputProduct.Stock;
+
+    await context.SaveChangesAsync();
+    return Results.NoContent();
+})
+.WithName("UpdateProduct")
+.Produces(StatusCodes.Status204NoContent)
+.Produces(StatusCodes.Status404NotFound);
+
+// DELETE: /api/products/{id} - Deletar um produto
+app.MapDelete("/api/products/{id}", async (int id, CatalogContext context) =>
+{
+    var product = await context.Products.FindAsync(id);
+    if (product is null)
+    {
+        return Results.NotFound();
+    }
+
+    context.Products.Remove(product);
+    await context.SaveChangesAsync();
+    return Results.NoContent();
+})
+.WithName("DeleteProduct")
+.Produces(StatusCodes.Status204NoContent)
+.Produces(StatusCodes.Status404NotFound);
 
 app.Run();
